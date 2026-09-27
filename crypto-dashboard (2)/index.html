@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מרכז פיקוד קריפטו</title>
+<link href="https://fonts.googleapis.com/css2?family=Varela+Round&display=swap" rel="stylesheet">
+<!--
+  ============================================================
+  דשבורד מסחר קריפטו
+  מקור דאטא עיקרי: data/market.json (נכתב על ידי GitHub Actions)
+  גיבוי: API חי מהדפדפן (Binance / CoinGecko / Bybit / CoinCap)
+  תיק + יומן + מחשבונים: localStorage
+  ============================================================
+-->
+<style>
+  :root{
+    --bg:#f5d8e3; --panel:#fdeef4; --panel2:#f9d5e4; --border:#f0b8cf;
+    --txt:#5d2a42; --txt2:#8b5a73; --txt3:#b8899f;
+    --up:#27ae60; --dn:#e74c3c; --warn:#f39c12; --accent:#c2185b; --purple:#7b2d8b;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:'Varela Round', 'Segoe UI', system-ui, sans-serif;
+    font-variant-numeric:tabular-nums; min-height:100vh; padding:16px;
+  }
+  .wrap{max-width:1240px; margin:0 auto;}
+  .hdr{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;}
+  .hdr h1{font-size:19px; font-weight:600; display:flex; align-items:center; gap:8px;}
+  .live{width:8px; height:8px; border-radius:99px; background:var(--purple); animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .hdr .meta{font-size:12.5px; color:var(--txt2); display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
+  .btn{background:var(--panel2); border:1px solid var(--border); color:var(--txt); border-radius:10px; padding:6px 14px; cursor:pointer; font-size:13px; transition:.15s;}
+  .btn:hover{border-color:var(--txt3);}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .btn.danger{background:transparent; border-color:transparent; color:var(--dn); font-size:12px; padding:2px 6px;}
+  .nav{display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;}
+  .nav button{flex:1; min-width:110px; background:var(--panel); border:1px solid var(--border); color:var(--txt2); border-radius:10px; padding:9px 8px; cursor:pointer; font-size:14px; font-weight:600; transition:.15s;}
+  .nav button.on{background:var(--purple); color:#fff; border-color:var(--purple);}
+  .stats{display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:12px;}
+  .st{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:11px 15px;}
+  .st .k{font-size:12px; color:var(--txt3); margin-bottom:4px;}
+  .st .v{font-size:21px; font-weight:600;}
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:12px;}
+  .ctrl{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;}
+  .ctrl input[type=text]{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:7px 14px; color:var(--txt); font-size:14px; min-width:180px; outline:none;}
+  .ctrl input[type=text]:focus{border-color:var(--accent);}
+  .ctrl select{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:7px 10px; color:var(--txt); font-size:13.5px; outline:none; font-family:inherit;}
+  .chip{background:transparent; border:1px solid var(--border); color:var(--txt2); border-radius:99px; padding:5px 14px; cursor:pointer; font-size:13px;}
+  .chip.on{background:var(--txt); color:var(--bg); border-color:var(--txt); font-weight:600;}
+  .hint{font-size:12px; color:var(--txt3);}
+  .lbl{font-size:12px; color:var(--txt3); margin:0 0 8px;}
+  .lbl2{font-size:14px; font-weight:600; margin:14px 0 10px;}
+  .twrap{overflow-x:auto;}
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  th{text-align:right; font-weight:500; color:var(--txt3); font-size:12px; padding:8px 8px; border-bottom:1px solid var(--border); cursor:pointer; user-select:none; white-space:nowrap;}
+  th:hover{color:var(--txt);}
+  td{padding:10px 8px; border-bottom:1px solid var(--border); white-space:nowrap;}
+  tbody tr:hover td{background:var(--panel2);}
+  .up{color:var(--up);} .dn{color:var(--dn);}
+  .coin{display:flex; align-items:center; gap:8px; font-weight:600;}
+  .coin .sym{color:var(--txt3); font-weight:400; font-size:12px;}
+  .rng{width:90px; height:5px; background:#f0a8c8; border-radius:99px; position:relative; display:inline-block;}
+  .rng i{position:absolute; top:-3px; width:3px; height:11px; border-radius:2px; background:var(--txt);}
+  .sig{font-size:11.5px; border-radius:6px; padding:3px 9px; display:inline-block; font-weight:600;}
+  .s-mom{background:rgba(39,174,96,.13); color:var(--up);}
+  .s-big{background:rgba(194,24,91,.16); color:var(--accent);}
+  .s-neg{background:rgba(231,76,60,.13); color:var(--dn);}
+  .s-hi{background:rgba(243,156,18,.14); color:var(--warn);}
+  .pgn{display:flex; gap:6px; justify-content:center; margin-top:12px; flex-wrap:wrap;}
+  .pgn button{background:transparent; border:1px solid var(--border); color:var(--txt2); border-radius:6px; min-width:32px; padding:5px 9px; cursor:pointer; font-size:13px;}
+  .pgn button.on{background:var(--txt); color:var(--bg); border-color:var(--txt); font-weight:600;}
+  .al{display:flex; gap:10px; align-items:flex-start; border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:8px; font-size:13.5px; background:var(--panel2);}
+  .dot{width:8px; height:8px; border-radius:99px; margin-top:5px; flex-shrink:0;}
+  .err{display:none; border:1px solid rgba(231,76,60,.4); background:rgba(231,76,60,.07); color:#c0392b; border-radius:10px; padding:10px 14px; font-size:13.5px; margin-bottom:12px;}
+  .okmsg{border:1px solid rgba(194,24,91,.32); background:rgba(194,24,91,.07); color:#a0306b; border-radius:10px; padding:10px 14px; font-size:13.5px; margin-bottom:12px; display:none;}
+  .keyrow{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;}
+  .keyrow input{flex:1; min-width:200px; background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:7px 12px; color:var(--txt); font-size:13px; outline:none;}
+  form.fld{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center;}
+  form.fld input, form.fld select{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:7px 12px; color:var(--txt); font-size:13.5px; outline:none; min-width:100px;}
+  form.fld input:focus{border-color:var(--accent);}
+  .rec{border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:8px; background:var(--panel2); display:flex; gap:10px; align-items:flex-start; font-size:13.5px;}
+  .rec b.rs{font-size:15px;}
+  .tag{font-size:11px; border-radius:5px; padding:2px 8px; font-weight:600; margin-left:6px;}
+  .t-mom{background:rgba(39,174,96,.13); color:var(--up);}
+  .t-watch{background:rgba(194,24,91,.16); color:var(--accent);}
+  .t-avoid{background:rgba(231,76,60,.13); color:var(--dn);}
+  .t-regime{background:rgba(243,156,18,.14); color:var(--warn);}
+  footer{font-size:12px; color:var(--txt3); margin-top:8px; line-height:1.7;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .calc-out{background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-top:12px; font-size:14px; line-height:2;}
+  .calc-out b{font-size:16px;}
+  .lock{display:none; border:1px solid rgba(231,76,60,.5); background:rgba(231,76,60,.08); color:#c0392b; border-radius:14px; padding:12px 16px; font-size:14.5px; margin-bottom:12px;}
+  .chart-svg{display:block; width:100%; height:auto;}
+  .nrow{display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13.5px; align-items:baseline;}
+  .nrow a{color:var(--txt); text-decoration:none;}
+  .nrow a:hover{color:var(--accent);}
+  .nrow .tm{font-size:11.5px; color:var(--txt3); white-space:nowrap;}
+  @media(max-width:900px){
+    body{padding:10px;}
+    .stats{grid-template-columns:repeat(3,1fr);}
+    .grid2{grid-template-columns:1fr;}
+    .st .v{font-size:17px;}
+  }
+  @media(max-width:520px){
+    .stats{grid-template-columns:repeat(2,1fr);}
+    .nav button{min-width:80px; font-size:13px; padding:8px 4px;}
+    .hdr h1{font-size:16px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <h1><span class="live"></span> מרכז פיקוד קריפטו</h1>
+    <div class="meta">
+      <span id="src">מקור: ·</span>
+      <span>עדכון: <b id="upd" class="num">·</b></span>
+      <span>רענון בעוד <b id="cd" class="num">60</b>ש</span>
+      <button class="btn" onclick="loadData(true)">רענון</button>
+      <button class="btn" onclick="toggleSettings()">הגדרות</button>
+    </div>
+  </div>
+
+  <div class="nav">
+    <button id="n1" class="on" onclick="showTab(1)">שוק</button>
+    <button id="n2" onclick="showTab(2)">תיק אישי</button>
+    <button id="n3" onclick="showTab(3)">מחשבונים</button>
+    <button id="n4" onclick="showTab(4)">המלצות דאטא</button>
+  </div>
+
+  <div class="err" id="err"></div>
+  <div class="lock" id="lockBanner"></div>
+  <div class="okmsg" id="settings">
+    <b>API keys (אופציונלי):</b> משמשים רק כגיבוי אם ה-JSON מהשרת לא קיים.
+    <div class="keyrow">
+      <input type="text" id="cgkey" placeholder="CoinGecko demo key (cg_demo_...)">
+      <button class="btn primary" onclick="saveKey()">שמור</button>
+      <button class="btn" onclick="clearKey()">נקה</button>
+    </div>
+    <div class="keyrow" style="margin-top:10px">
+      <input type="text" id="ethkey" placeholder="Etherscan API key (לגז ETH)">
+      <button class="btn" onclick="saveEth()">שמור</button>
+      <button class="btn" onclick="clearEth()">נקה</button>
+    </div>
+  </div>
+
+  <div id="t1">
+    <div class="stats" id="stats"></div>
+    <div class="panel">
+      <div class="ctrl">
+        <b>גרף נרות</b>
+        <select id="chSym"><option>BTC</option><option>ETH</option><option>SOL</option><option>BNB</option><option>XRP</option></select>
+        <select id="chInt"><option value="1h">1 שעה</option><option value="4h">4 שעות</option><option value="1d">יומי</option></select>
+        <button class="btn" onclick="loadChart()">טען גרף</button>
+        <span class="hint" id="chSrc"></span>
+      </div>
+      <div id="chartBox" class="twrap"><span class="hint">בחר מטבע ולחץ "טען גרף": 100 נרות אחרונים עם נפח.</span></div>
+    </div>
+    <div class="panel" id="fundPanel" style="display:none">
+      <div class="lbl">Funding rates · פרפטואלס. funding חריג = ספקולציה קיצונית, בדרך כלל סוף תנועה.</div>
+      <div class="twrap"><table>
+        <thead><tr><th>מטבע</th><th>Funding (8ש)</th><th>שנתי משוער</th><th>סטטוס</th></tr></thead>
+        <tbody id="fundRows"></tbody>
+      </table></div>
+    </div>
+    <div class="panel" id="movesPanel" style="display:none"><div id="moves"></div></div>
+    <div class="panel">
+      <div class="ctrl">
+        <input type="text" id="q" placeholder="חיפוש מטבע…" oninput="PG=0; render();">
+        <button class="chip on" id="cAll" onclick="setF('all')">הכל</button>
+        <button class="chip" id="cUp" onclick="setF('up')">עולים</button>
+        <button class="chip" id="cDn" onclick="setF('dn')">יורדים</button>
+        <button class="chip" id="cHot" onclick="setF('hot')">נפח גבוה</button>
+        <span class="hint">לחיצה על כותרת = מיון</span>
+      </div>
+      <div class="twrap"><table>
+        <thead><tr>
+          <th>#</th>
+          <th onclick="sortBy('name')">מטבע <span id="a-name"></span></th>
+          <th onclick="sortBy('price')">מחיר <span id="a-price"></span></th>
+          <th onclick="sortBy('c1h')">1ש% <span id="a-c1h"></span></th>
+          <th onclick="sortBy('c24h')">24ש% <span id="a-c24h"></span></th>
+          <th onclick="sortBy('c7d')">7י% <span id="a-c7d"></span></th>
+          <th onclick="sortBy('vol')">נפח 24ש <span id="a-vol"></span></th>
+          <th>טווח 24ש</th>
+          <th>סיגנל</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+      <div class="pgn" id="pgn"></div>
+    </div>
+    <div class="panel">
+      <div class="lbl">אזעקות מחושבות בזמן אמת</div>
+      <div id="alerts"></div>
+    </div>
+    <div class="panel" id="fngPanel" style="display:none">
+      <div class="lbl">מדד פחד וחמדנה (Fear &amp; Greed)</div>
+      <div id="fng"></div>
+    </div>
+    <div class="panel" id="newsPanel" style="display:none">
+      <div class="lbl">חדשות קריפטו חיות (Cointelegraph + CoinDesk)</div>
+      <div id="news"></div>
+    </div>
+    <div class="panel" id="gasPanel" style="display:none">
+      <div class="lbl">גז ETH ברשת (Etherscan)</div>
+      <div id="gas"></div>
+    </div>
+    <div class="panel" id="indPanel" style="display:none">
+      <div class="lbl">אינדיקטורים מחושבים מההיסטוריה (GitHub Actions)</div>
+      <div class="twrap"><table>
+        <thead><tr><th>מטבע</th><th>מחיר</th><th>RSI 14 (1ש)</th><th>ATR%</th><th>Vol Z-score</th><th>קרא</th></tr></thead>
+        <tbody id="indRows"></tbody>
+      </table></div>
+    </div>
+    <div class="panel" id="histPanel" style="display:none">
+      <div class="lbl">היסטוריה שנצברה · snapshot אחד ביום</div>
+      <div class="twrap"><table>
+        <thead><tr><th>תאריך</th><th>עולים/יורדים</th><th>Σ נפח</th><th>שינוי ממוצע</th><th>BTC</th></tr></thead>
+        <tbody id="hist"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div id="t2" style="display:none">
+    <div class="stats" id="pfStats"></div>
+    <div class="grid2">
+      <div class="panel">
+        <div class="lbl2">הוספת מטבע לתיק</div>
+        <form class="fld" onsubmit="return addHolding(event)">
+          <input type="text" id="hSym" placeholder="סימול (BTC)" required style="text-transform:uppercase">
+          <input type="number" id="hAmt" placeholder="כמות" step="any" min="0" required>
+          <input type="number" id="hBuy" placeholder="מחיר קנייה $" step="any" min="0" required>
+          <button class="btn primary" type="submit">הוסף</button>
+        </form>
+        <div class="twrap"><table>
+          <thead><tr><th>מטבע</th><th>כמות</th><th>קנייה</th><th>נוכחי</th><th>שווי</th><th>P&amp;L</th><th>תיק</th><th></th></tr></thead>
+          <tbody id="pfRows"></tbody>
+        </table></div>
+        <div class="hint" style="margin-top:8px">הנתונים נשמרים אצלך בדפדפן בלבד (localStorage).</div>
+      </div>
+      <div class="panel">
+        <div class="lbl2">יומן עסקאות סגורות · הסטטיסטיקה שלך</div>
+        <form class="fld" onsubmit="return addTrade(event)">
+          <input type="text" id="jSym" placeholder="סימול" required style="text-transform:uppercase">
+          <input type="number" id="jPnl" placeholder="רווח/הפסד %" step="any" required>
+          <input type="text" id="jSetup" placeholder="סוג אסטרטגיה (אופציונלי)">
+          <button class="btn primary" type="submit">תעד עסקה</button>
+        </form>
+        <div class="stats" id="jStats" style="grid-template-columns:repeat(3,1fr)"></div>
+        <div class="twrap" style="max-height:220px; overflow-y:auto"><table>
+          <thead><tr><th>תאריך</th><th>מטבע</th><th>P&amp;L</th><th>סטרטגיה</th><th></th></tr></thead>
+          <tbody id="jRows"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="t3" style="display:none">
+    <div class="grid2">
+      <div class="panel">
+        <div class="lbl2">כמה כדאי להשקיע · מחשבון גודל פוזיציה (כלל 1%)</div>
+        <form class="fld" style="flex-direction:column; align-items:stretch" onsubmit="return calcPos(event)">
+          <label class="hint">סימול (אופציונלי · ממלא מחיר כניסה אוטומטית)<input type="text" id="cSym" placeholder="SOL" style="width:100%; margin-top:4px; text-transform:uppercase" oninput="fillEntry()"></label>
+          <label class="hint">גודל חשבון ($)<input type="number" id="cAcct" step="any" min="0" placeholder="10000" style="width:100%; margin-top:4px"></label>
+          <label class="hint">סיכון לעסקה (%)<input type="number" id="cRisk" step="any" value="1" style="width:100%; margin-top:4px"></label>
+          <label class="hint">מחיר כניסה ($)<input type="number" id="cEntry" step="any" min="0" placeholder="117.5" style="width:100%; margin-top:4px"></label>
+          <label class="hint">Stop loss ($)<input type="number" id="cStop" step="any" min="0" placeholder="112" style="width:100%; margin-top:4px"></label>
+          <label class="hint">יעד ($)<input type="number" id="cTarget" step="any" min="0" placeholder="130" style="width:100%; margin-top:4px"></label>
+          <button class="btn primary" type="submit">חשב</button>
+        </form>
+        <div class="calc-out" id="posOut">מלא את השדות ולחץ "חשב".</div>
+      </div>
+      <div class="panel">
+        <div class="lbl2">תרחישי רווח/הפסד להחזקה</div>
+        <form class="fld" style="flex-direction:column; align-items:stretch" onsubmit="return calcScenario(event)">
+          <label class="hint">סימול<input type="text" id="sSym" placeholder="SOL" style="width:100%; margin-top:4px; text-transform:uppercase"></label>
+          <label class="hint">סכום השקעה ($)<input type="number" id="sAmt" step="any" min="0" placeholder="500" style="width:100%; margin-top:4px"></label>
+          <button class="btn primary" type="submit">הצג תרחישים</button>
+        </form>
+        <div class="calc-out" id="scenOut">בחר מטבע מהרשימה · המחיר הנוכחי יימשך אוטומטית.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="t4" style="display:none">
+    <div class="panel">
+      <div class="lbl">מנוע המלצות · נבנה בלעדית מהדאטא + כללים מוגדרים מראש · אין כאן ייעוץ, יש סינון מערכתי</div>
+      <div id="recs"></div>
+    </div>
+  </div>
+
+  <footer>
+    דאטא: GitHub Actions / Binance / CoinGecko · התיק, היומן וההיסטוריה נשמרים ב-localStorage, אצלך בדפדפן בלבד.
+    אין כאן ייעוץ השקעות. מסחר יומי מסוכן: רוב המסחרים הפרטיים מפסידים. סיכון מקסימלי 1% לעסקה, stop loss לפני כל כניסה.
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   שכבת נתונים: JSON מהשרת קודם, API חי כגיבוי
+   ============================================================ */
+let DATA = [];
+let F='all', SK='vol', SD=-1, PG=0;
+const PER = 20;
+let countdown = 60;
+let FNG_VAL = null;
+
+function showErr(msg){
+  const e = document.getElementById('err');
+  if(msg){ e.textContent = msg; e.style.display='block'; } else e.style.display='none';
+}
+
+function setSrc(s){ document.getElementById('src').textContent = 'מקור: ' + s; }
+
+async function loadData(manual){
+  showErr(null);
+  let usedFile = false;
+  try{
+    const r = await fetch('./data/market.json?ts=' + Date.now());
+    if(r.ok){
+      const j = await r.json();
+      if(j.tickers && j.tickers.length){
+        DATA = j.tickers;
+        usedFile = true;
+        setSrc('Actions snapshot (' + new Date(j.updated).toLocaleTimeString('he-IL') + ')');
+      }
+      if(j.snapshots && j.snapshots.length){
+        document.getElementById('histPanel').style.display = 'block';
+        renderHist(j.snapshots);
+      }
+      if(j.indicators && j.indicators.length){
+        document.getElementById('indPanel').style.display = 'block';
+        document.getElementById('indRows').innerHTML = j.indicators.map(c=>{
+          const rsiCol = c.rsi <= 30 ? 'up' : c.rsi >= 70 ? 'dn' : '';
+          const call = c.rsi <= 30 ? '<span class="up">קניית עודף</span>'
+            : c.rsi >= 70 ? '<span class="dn">עודף קנייה</span>'
+            : c.volZ >= 2 ? '<span style="color:var(--warn)">נפח חריג</span>' : '<span class="hint">נייטרלי</span>';
+          return '<tr><td class="coin">' + c.sym + '</td><td class="num">$' + fmtP(c.price) + '</td>'
+            + '<td class="num ' + rsiCol + '">' + c.rsi.toFixed(1) + '</td>'
+            + '<td class="num">' + c.atrPct.toFixed(2) + '%</td>'
+            + '<td class="num">' + c.volZ.toFixed(2) + '</td>'
+            + '<td>' + call + '</td></tr>';
+        }).join('');
+      }
+      if(j.funding && Object.keys(j.funding).length){
+        window.FUNDING = j.funding;
+        renderFunding(j.funding);
+      }
+      if(j.candles){
+        window.FILE_CANDLES = j.candles;
+      }
+    }
+  }catch(e){ console.warn('market.json not available yet:', e); }
+
+  if(!usedFile){
+    const fails = [];
+    try{
+      await fetchBinance();
+      setSrc('Binance (live)');
+    }catch(bErr){
+      fails.push('Binance');
+      try{
+        await fetchCoinGecko();
+        setSrc('CoinGecko (live)');
+      }catch(cErr){
+        fails.push('CoinGecko');
+        try{
+          await fetchBybit();
+          setSrc('Bybit (live)');
+        }catch(yErr){
+          fails.push('Bybit');
+          try{
+            await fetchCoinCap();
+            setSrc('CoinCap (live)');
+          }catch(ccErr){
+            fails.push('CoinCap');
+            showErr('כל מקורות הדאטא נכשלו: ' + fails.join(', ') + '. הפתרון הקבוע: להפעיל את GitHub Actions שכותב data/market.json (מדריך בתיקייה).');
+          }
+        }
+      }
+    }
+  }
+
+  renderStats(); renderAlerts(); render(); snapshot(); detectMoves();
+  renderPortfolio(); renderJournal(); renderRecs(); loadExtras();
+  document.getElementById('upd').textContent = new Date().toLocaleTimeString('he-IL');
+  countdown = 60;
+  if(manual){
+    const el = document.getElementById('upd');
+    el.style.color = 'var(--up)';
+    setTimeout(()=> el.style.color = '', 800);
+  }
+}
+
+async function fetchBinance(){
+  const res = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const all = await res.json();
+  const skip = ['USDCUSDT','FDUSDUSDT','TUSDUSDT','DAIUSDT','EURUSDT','TRYUSDT','XUSDUSDT','USDPUSDT','EURIUSDT','WBTCUSDT'];
+  DATA = all
+    .filter(t => t.symbol.endsWith('USDT') && !skip.includes(t.symbol))
+    .map(t => ({
+      name: t.symbol.replace('USDT',''),
+      price: +t.lastPrice,
+      c24h: +t.priceChangePercent,
+      c1h: 0, c7d: 0,
+      vol: +t.quoteVolume,
+      hi: +t.highPrice, lo: +t.lowPrice,
+      mc: 0
+    }))
+    .sort((a,b)=> b.vol - a.vol)
+    .slice(0, 100);
+  if(!DATA.length) throw new Error('empty');
+}
+
+async function fetchCoinGecko(){
+  const key = (localStorage.getItem('cg_demo_key') || '').trim();
+  const url = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=volume_desc&per_page=100&page=1&sparkline=false&price_change_percentage=1h,24h,7d';
+  const headers = {};
+  if(key) headers['x-cg-demo-api-key'] = key;
+  const res = await fetch(url, {headers});
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const all = await res.json();
+  DATA = all.map(c => ({
+    name: c.symbol.toUpperCase(),
+    price: c.current_price,
+    c1h: c.price_change_percentage_1h_in_currency || 0,
+    c24h: c.price_change_percentage_24h || 0,
+    c7d: c.price_change_percentage_7d_in_currency || 0,
+    vol: c.total_volume || 0,
+    hi: c.high_24h || 0, lo: c.low_24h || 0,
+    mc: c.market_cap || 0
+  }));
+  if(!DATA.length) throw new Error('empty');
+}
+
+async function fetchBybit(){
+  const res = await fetch('https://api.bybit.com/v5/market/tickers?category=spot');
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  if(j.retCode !== 0) throw new Error('bybit retCode ' + j.retCode);
+  DATA = j.result.list
+    .filter(t => t.symbol.endsWith('USDT'))
+    .map(t => ({
+      name: t.symbol.replace('USDT',''),
+      price: +t.lastPrice,
+      c24h: +t.price24hPcnt * 100,
+      c1h: 0, c7d: 0,
+      vol: +t.turnover24h || 0,
+      hi: +t.highPrice24h || 0, lo: +t.lowPrice24h || 0,
+      mc: 0
+    }))
+    .sort((a,b)=> b.vol - a.vol)
+    .slice(0, 100);
+  if(!DATA.length) throw new Error('empty');
+}
+
+async function fetchCoinCap(){
+  const res = await fetch('https://api.coincap.io/v2/assets?limit=100');
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  DATA = (j.data || [])
+    .filter(c => ['USDT','USDC','DAI','FDUSD','TUSD'].indexOf(c.symbol) === -1)
+    .map(c => ({
+      name: c.symbol,
+      price: +c.priceUsd,
+      c24h: +c.changePercent24Hr || 0,
+      c1h: 0, c7d: 0,
+      vol: +c.volumeUsd24Hr || 0,
+      hi: 0, lo: 0,
+      mc: +c.marketCapUsd || 0
+    }))
+    .sort((a,b)=> b.vol - a.vol)
+    .slice(0, 100);
+  if(!DATA.length) throw new Error('empty');
+}
+
+function findCoin(sym){
+  sym = (sym||'').toUpperCase().trim();
+  return DATA.find(c => c.name === sym);
+}
+
+function fmtP(p){
+  if(p >= 1000) return p.toLocaleString('en-US',{maximumFractionDigits:2});
+  if(p >= 1) return p.toFixed(2);
+  return p.toFixed(5);
+}
+function fmtV(v){
+  if(v >= 1e9) return (v/1e9).toFixed(2)+'B';
+  if(v >= 1e6) return (v/1e6).toFixed(0)+'M';
+  if(v >= 1e3) return (v/1e3).toFixed(0)+'K';
+  return v.toFixed(0);
+}
+function pctCls(x){ return x >= 0 ? 'up' : 'dn'; }
+function pctTxt(x){ return (x>=0?'+':'') + x.toFixed(2) + '%'; }
+
+function signal(c){
+  const rngPos = c.hi > c.lo ? (c.price - c.lo)/(c.hi - c.lo)*100 : 50;
+  if(c.c24h >= 8)  return ['s-big','תנועה חריגה'];
+  if(c.c24h <= -8) return ['s-neg','זרימה שלילית חריגה'];
+  if(rngPos >= 97 && c.c24h > 2) return ['s-hi','ליד שיא 24ש'];
+  if(c.c24h >= 4 && c.c1h >= 0)  return ['s-mom','מומנטום'];
+  return null;
+}
+
+function renderStats(){
+  const up = DATA.filter(c=>c.c24h>0).length;
+  const dn = DATA.length - up;
+  const volSum = DATA.reduce((a,c)=>a+c.vol,0);
+  const avg = DATA.length ? DATA.reduce((a,c)=>a+c.c24h,0)/DATA.length : 0;
+  let top = null;
+  DATA.forEach(c=>{ if(!top || c.c24h > top.c24h) top = c; });
+  document.getElementById('stats').innerHTML = [
+    ['ניטור', DATA.length + ' מטבעות'],
+    ['עולים 24ש', up + ' ▲'],
+    ['יורדים 24ש', dn + ' ▼'],
+    ['שינוי ממוצע', '<span class="' + pctCls(avg) + '">' + pctTxt(avg) + '</span>'],
+    ['Σ נפח 24ש', '$' + fmtV(volSum)],
+    ['מוביל היום', top ? top.name + ' <span class="up">' + pctTxt(top.c24h) + '</span>' : '·']
+  ].map(x=>'<div class="st"><div class="k">'+x[0]+'</div><div class="v num">'+x[1]+'</div></div>').join('');
+}
+
+function renderAlerts(){
+  const AL = [];
+  DATA.forEach(c=>{
+    const rngPos = c.hi > c.lo ? (c.price - c.lo)/(c.hi - c.lo)*100 : 50;
+    if(c.c24h >= 8)
+      AL.push({sev:1, col:'var(--accent)', t:'<b>'+c.name+'</b> '+pctTxt(c.c24h)+' ב-24ש עם נפח $'+fmtV(c.vol)+'. תנועה חריגה: לא רודפים, מחכים ל-retest או אימות נפח'});
+    if(c.c24h <= -8)
+      AL.push({sev:3, col:'var(--dn)', t:'<b>'+c.name+'</b> '+pctTxt(c.c24h)+'. זרימה שלילית חריגה. שורטים רק אחרי retest של תמך שבור, לא בתוך הנפילה'});
+    if(rngPos >= 97 && c.c24h > 2)
+      AL.push({sev:2, col:'var(--warn)', t:'<b>'+c.name+'</b> ב-'+rngPos.toFixed(0)+'% מטווח היום. בריחה דורשת נפח חריג; בלי אימות זו מלכודת'});
+    if(c.c24h >= 4 && c.c1h >= 0)
+      AL.push({sev:2, col:'var(--up)', t:'<b>'+c.name+'</b> מומנטום ('+pctTxt(c.c24h)+'). ראוי לסריקת כניסה ל-break-out'});
+  });
+  AL.sort((a,b)=> a.sev - b.sev);
+  document.getElementById('alerts').innerHTML = AL.length
+    ? AL.slice(0,8).map(a=>'<div class="al"><span class="dot" style="background:'+a.col+'"></span><span>'+a.t+'</span></div>').join('')
+    : '<div class="hint">אין אזעקות מעבר סף כרגע. שוק רגוע יחסית.</div>';
+}
+
+window.sortBy = k => { if(SK===k) SD*=-1; else {SK=k; SD=-1;} PG=0; render(); };
+window.setF = f => { F=f; PG=0;
+  ['cAll','cUp','cDn','cHot'].forEach(id=>document.getElementById(id).classList.remove('on'));
+  document.getElementById('c'+f.charAt(0).toUpperCase()+f.slice(1)).classList.add('on');
+  render();
+};
+
+function render(){
+  ['name','price','c1h','c24h','c7d','vol'].forEach(k=>{
+    document.getElementById('a-'+k).textContent = (SK===k) ? (SD===1?'▲':'▼') : '';
+  });
+  const q = (document.getElementById('q').value||'').toUpperCase();
+  let list = DATA.filter(c => c.name.indexOf(q) !== -1);
+  if(F==='up') list = list.filter(c=>c.c24h>0);
+  if(F==='dn') list = list.filter(c=>c.c24h<0);
+  if(F==='hot') list = list.filter(c=>c.vol > 5e8);
+  list = list.slice().sort((a,b)=>{
+    const x=a[SK], y=b[SK];
+    return (typeof x==='string' ? (x<y?-1:x>y?1:0) : x-y) * SD * -1;
+  });
+  const pages = Math.max(1, Math.ceil(list.length/PER));
+  if(PG >= pages) PG = pages-1;
+  const view = list.slice(PG*PER, PG*PER+PER);
+
+  document.getElementById('rows').innerHTML = view.map((c,i)=>{
+    const sig = signal(c);
+    const rngPos = c.hi > c.lo ? (c.price - c.lo)/(c.hi - c.lo)*100 : 50;
+    const rngHtml = c.hi > 0
+      ? '<span class="rng"><i style="right:'+rngPos.toFixed(1)+'%"></i></span>'
+      : '<span class="hint">·</span>';
+    return '<tr>'
+      + '<td class="hint num">' + (PG*PER+i+1) + '</td>'
+      + '<td><span class="coin">' + c.name + ' <span class="sym">/ USDT</span></span></td>'
+      + '<td class="num">$' + fmtP(c.price) + '</td>'
+      + '<td class="num ' + pctCls(c.c1h) + '">' + (c.c1h ? pctTxt(c.c1h) : '·') + '</td>'
+      + '<td class="num ' + pctCls(c.c24h) + '">' + pctTxt(c.c24h) + '</td>'
+      + '<td class="num ' + pctCls(c.c7d) + '">' + (c.c7d ? pctTxt(c.c7d) : '·') + '</td>'
+      + '<td class="num" style="color:var(--txt2)">$' + fmtV(c.vol) + '</td>'
+      + '<td>' + rngHtml + '</td>'
+      + '<td>' + (sig ? '<span class="sig '+sig[0]+'">'+sig[1]+'</span>' : '<span class="hint">·</span>') + '</td>'
+      + '</tr>';
+  }).join('');
+
+  document.getElementById('pgn').innerHTML = Array.apply(null, {length: pages}).map(function(_,i){ return i; })
+    .map(i=>'<button class="'+(i===PG?'on':'')+'" onclick="PG='+i+';render()">'+(i+1)+'</button>').join('');
+}
+</script>
+
+<script>
+/* ============================================================
+   תיק אישי + יומן (localStorage)
+   ============================================================ */
+function loadLS(k, def){ try{ return JSON.parse(localStorage.getItem(k)) || def; }catch(e){ return def; } }
+function saveLS(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+
+let PF = loadLS('pf_holdings', []);
+let TRADES = loadLS('pf_trades', []);
+
+window.addHolding = function(ev){
+  ev.preventDefault();
+  const sym = document.getElementById('hSym').value.toUpperCase().trim();
+  const amt = +document.getElementById('hAmt').value;
+  const buy = +document.getElementById('hBuy').value;
+  if(!sym || amt<=0 || buy<=0) return false;
+  const ex = PF.find(h => h.sym === sym);
+  if(ex){
+    ex.buy = (ex.buy*ex.amt + buy*amt) / (ex.amt + amt);
+    ex.amt += amt;
+  } else {
+    PF.push({sym: sym, amt: amt, buy: buy, ts: Date.now()});
+  }
+  saveLS('pf_holdings', PF);
+  ev.target.reset();
+  renderPortfolio();
+  return false;
+};
+
+window.delHolding = function(i){ PF.splice(i,1); saveLS('pf_holdings', PF); renderPortfolio(); };
+
+function renderPortfolio(){
+  let inv=0, val=0;
+  const rows = PF.map((h,i)=>{
+    const c = findCoin(h.sym);
+    const cur = c ? c.price : null;
+    const v = cur != null ? h.amt*cur : null;
+    const cost = h.amt*h.buy;
+    inv += cost;
+    if(v != null) val += v;
+    return {i: i, h: h, cur: cur, v: v, cost: cost, pnl: v != null ? v - cost : null};
+  });
+  const totVal = val;
+  document.getElementById('pfStats').innerHTML = [
+    ['השקעתי (עלות)', '$' + fmtV(inv)],
+    ['שווי נוכחי', '$' + fmtV(val)],
+    ['רווח/הפסד כולל', pnlHtml(val-inv, inv ? (val-inv)/inv*100 : 0)],
+    ['מספר מטבעות', PF.length],
+    ['החזקה גדולה', biggest(rows)],
+    ['ט. 24ש של התיק', dayChgHtml(rows)]
+  ].map(x=>'<div class="st"><div class="k">'+x[0]+'</div><div class="v num">'+x[1]+'</div></div>').join('');
+
+  document.getElementById('pfRows').innerHTML = rows.length ? rows.map(r=>{
+    const alloc = totVal > 0 && r.v != null ? r.v/totVal*100 : 0;
+    const pnlCell = r.pnl != null
+      ? '<span class="' + pctCls(r.pnl) + '">' + (r.pnl>=0?'+':'') + '$' + fmtV(Math.abs(r.pnl)) + ' (' + pctTxt((r.pnl/r.cost)*100) + ')</span>'
+      : '<span class="hint">·</span>';
+    return '<tr>'
+      + '<td class="coin">' + r.h.sym + '</td>'
+      + '<td class="num">' + r.h.amt + '</td>'
+      + '<td class="num">$' + fmtP(r.h.buy) + '</td>'
+      + '<td class="num">' + (r.cur!=null ? '$'+fmtP(r.cur) : '<span class="hint">·</span>') + '</td>'
+      + '<td class="num">' + (r.v!=null ? '$'+fmtV(r.v) : '·') + '</td>'
+      + '<td class="num">' + pnlCell + '</td>'
+      + '<td class="num hint">' + alloc.toFixed(1) + '%</td>'
+      + '<td><button class="btn danger" onclick="delHolding('+r.i+')">✕</button></td>'
+      + '</tr>';
+  }).join('') : '<tr><td colspan="8" class="hint">התיק ריק. הוסף מטבע ראשון.</td></tr>';
+}
+
+function pnlHtml(diff, pct){
+  return '<span class="' + pctCls(diff) + '">' + (diff>=0?'+':'−') + '$' + fmtV(Math.abs(diff)) + ' (' + pctTxt(pct) + ')</span>';
+}
+function biggest(rows){
+  const withV = rows.filter(r=>r.v!=null).sort((a,b)=>b.v-a.v);
+  if(!withV.length) return '·';
+  const t = rows.reduce((a,r)=>a+(r.v||0),0);
+  return t > 0 ? withV[0].h.sym + ' ' + (withV[0].v/t*100).toFixed(0) + '%' : '·';
+}
+function dayChgHtml(rows){
+  let s=0, w=0;
+  rows.forEach(r=>{
+    const c = findCoin(r.h.sym);
+    if(c && r.v != null){ s += r.v * c.c24h/100; w += r.v; }
+  });
+  if(!w) return '·';
+  const p = s/w*100;
+  return '<span class="' + pctCls(p) + '">' + pctTxt(p) + '</span>';
+}
+
+window.addTrade = function(ev){
+  ev.preventDefault();
+  const sym = document.getElementById('jSym').value.toUpperCase().trim();
+  const pnl = +document.getElementById('jPnl').value;
+  const setup = document.getElementById('jSetup').value.trim();
+  if(!sym || isNaN(pnl)) return false;
+  TRADES.unshift({sym: sym, pnl: pnl, setup: setup, ts: Date.now()});
+  saveLS('pf_trades', TRADES);
+  ev.target.reset();
+  renderJournal();
+  return false;
+};
+window.delTrade = function(i){ TRADES.splice(i,1); saveLS('pf_trades', TRADES); renderJournal(); };
+
+function renderJournal(){
+  const n = TRADES.length;
+  const wins = TRADES.filter(t=>t.pnl>0);
+  const losses = TRADES.filter(t=>t.pnl<=0);
+  const wr = n ? wins.length/n*100 : 0;
+  const avgW = wins.length ? wins.reduce((a,t)=>a+t.pnl,0)/wins.length : 0;
+  const avgL = losses.length ? losses.reduce((a,t)=>a+t.pnl,0)/losses.length : 0;
+  const exp = n ? TRADES.reduce((a,t)=>a+t.pnl,0)/n : 0;
+  const gw = wins.reduce((a,t)=>a+t.pnl,0), gl = Math.abs(losses.reduce((a,t)=>a+t.pnl,0));
+  const pf = gl > 0 ? (gw/gl).toFixed(2) : (gw>0 ? '∞' : '·');
+  document.getElementById('jStats').innerHTML = [
+    ['עסקאות', n],
+    ['אחזור זכיות', wr.toFixed(0) + '%'],
+    ['תוחלת לעסקה', '<span class="' + pctCls(exp) + '">' + pctTxt(exp) + '</span>'],
+    ['זכיה ממוצעת', '<span class="up">' + pctTxt(avgW) + '</span>'],
+    ['הפסד ממוצע', '<span class="dn">' + pctTxt(avgL) + '</span>'],
+    ['Profit factor', pf]
+  ].map(x=>'<div class="st"><div class="k">'+x[0]+'</div><div class="v num">'+x[1]+'</div></div>').join('');
+
+  document.getElementById('jRows').innerHTML = TRADES.length ? TRADES.map((t,i)=>
+    '<tr><td class="hint num">' + new Date(t.ts).toLocaleDateString('he-IL') + '</td>'
+    + '<td>' + t.sym + '</td>'
+    + '<td class="num ' + pctCls(t.pnl) + '">' + pctTxt(t.pnl) + '</td>'
+    + '<td class="hint">' + (t.setup || '·') + '</td>'
+    + '<td><button class="btn danger" onclick="delTrade('+i+')">✕</button></td></tr>'
+  ).join('') : '<tr><td colspan="5" class="hint">אין עסקאות מתועדות. התחל לתעד כל סגירת פוזיציה.</td></tr>';
+  updateLock();
+}
+
+/* ============================================================
+   מחשבונים
+   ============================================================ */
+window.fillEntry = function(){
+  const sym = document.getElementById('cSym').value.toUpperCase().trim();
+  if(!sym) return;
+  const c = findCoin(sym);
+  if(c) document.getElementById('cEntry').value = c.price;
+};
+
+window.calcPos = function(ev){
+  ev.preventDefault();
+  const sym = document.getElementById('cSym').value.toUpperCase().trim();
+  const acct = +document.getElementById('cAcct').value;
+  const risk = +document.getElementById('cRisk').value;
+  let entry = +document.getElementById('cEntry').value;
+  const stop = +document.getElementById('cStop').value;
+  const target = +document.getElementById('cTarget').value;
+  const out = document.getElementById('posOut');
+  const c = sym ? findCoin(sym) : null;
+  if(!entry && c) entry = c.price;
+  if(!(acct>0) || !(risk>0) || !(entry>0) || !(stop>0)){
+    out.innerHTML = 'חסרים שדות. מינימום: חשבון, סיכון, כניסה, stop loss.';
+    return false;
+  }
+  if(stop >= entry && target <= entry){
+    out.innerHTML = 'בדוק כיוון: stop מעל כניסה אבל יעד מתחת. לא עולה יחד.';
+    return false;
+  }
+  const riskAmt = acct * risk/100;
+  const perUnit = Math.abs(entry - stop);
+  const units = riskAmt / perUnit;
+  const posVal = units * entry;
+  const lev = posVal / acct;
+  let rr = null;
+  if(target > 0) rr = Math.abs(target - entry) / perUnit;
+  out.innerHTML =
+    (c ? '<b>' + c.name + '</b> @ $' + fmtP(c.price) + '<br>' : '')
+    + 'סכום בסיכון: <b>$' + riskAmt.toFixed(2) + '</b><br>'
+    + 'גודל פוזיציה: <b>' + units.toFixed(4) + ' יחידות</b> (שווי $' + fmtV(posVal) + ')<br>'
+    + 'מינוף משתמע: <b>' + lev.toFixed(2) + 'x</b>'
+    + (lev > 3 ? ' <span class="dn">· גבוה מדי ליום-טריידינג בסיסי</span>' : '') + '<br>'
+    + (rr != null ? 'יחס risk/reward: <b>1 : ' + rr.toFixed(2) + '</b>' + (rr < 2 ? ' <span class="dn">· מתחת ל-1:2, לא שווה</span>' : ' <span class="up">· עובר סף</span>') : '');
+  return false;
+};
+
+window.calcScenario = function(ev){
+  ev.preventDefault();
+  const sym = document.getElementById('sSym').value.toUpperCase().trim();
+  const amt = +document.getElementById('sAmt').value;
+  const c = findCoin(sym);
+  const out = document.getElementById('scenOut');
+  if(!c){ out.innerHTML = 'המטבע לא נמצא ב-100 המובילים כרגע.'; return false; }
+  if(!(amt > 0)){ out.innerHTML = 'הכנס סכום השקעה.'; return false; }
+  const rows = [5,10,25,50,-5,-10,-25].map(p=>{
+    const v = amt * (1 + p/100);
+    const d = v - amt;
+    return '<span class="' + pctCls(d) + '">' + (p>0?'+':'') + p + '% → $' + v.toFixed(2) + ' (' + (d>=0?'+':'−') + '$' + Math.abs(d).toFixed(2) + ')</span>';
+  });
+  out.innerHTML = '<b>' + c.name + '</b> @ $' + fmtP(c.price) + ' · השקעה $' + amt.toFixed(2)
+    + '<br>' + rows.slice(0,4).join('<br>') + '<br><span class="hint">' + rows.slice(4).join(' · ') + '</span>';
+  return false;
+};
+
+/* ============================================================
+   מנוע המלצות
+   ============================================================ */
+const SECTORS = {
+  'אינפרא בלוקצ׳יין': ['ETH','SOL','ADA','AVAX','DOT','ATOM','NEAR','APT','SUI','SEI','TON','TRX','ALGO','XTZ','EOS','FTM','ICP','HBAR','VET','INJ','EGLD','KAVA','FLOW'],
+  'מטבעות מים': ['DOGE','SHIB','PEPE','WIF','BONK','FLOKI','MEME','BOME','MOG','WEN','MYRO','PONKE','POPCAT','MEW','NEIRO','PNUT'],
+  'פתרונות שכבה-2': ['ARB','OP','POL','IMX','STRK','MNT','MANTA','SCROLL'],
+  'בינה מלאכותית': ['FET','RENDER','TAO','GRT','ARKM','WLD','AGIX','OCEAN','NMR','PAAL','AIOZ','GLM'],
+  'כסות ומסחר מבוזר': ['UNI','AAVE','MKR','SNX','LDO','CRV','CAKE','RUNE','SUSHI','1INCH','BAL','COMP','YFI','UMA','ENS','DYDX','JUP','PYTH','MAV'],
+  'מטבעות זהב דיגיטלי': ['BTC','BCH','LTC','DASH','ZEC','ETC','XEC'],
+  'אחסון ונתונים': ['FIL','AR','STX','STORJ','HOT','SC'],
+  'עולם המשחקים': ['SAND','MANA','AXS','GALA','ENJ','GMT','APE','CHZ','PIXEL','PORTAL','MAGIC','ILV','YGG'],
+  'אורקלים ומידע': ['LINK','BAND','API3','DIA','TRB'],
+  'NFT ומטאברס': ['BLUR','LOOKS','RARE','SUPER'],
+  'תשתיות מסחר': ['WOO','GMX','PERP','VELO','OSMO'],
+  'פיננס מסורתי על שרשרת': ['ONDO','ENA','LQTY'],
+  'אבטחה ופרטיות': ['XMR','SCRT','ROSE','NYM'],
+  'זהות וממשל': ['GTC','CVC','ID'],
+  'תשתיות סולנה': ['RAY','ORCA','MNDE'],
+  'אינטרנט של הדברים': ['IOTX','HNT','JASMY','WMT'],
+  'הלוואות ומינוף': ['EULER','SILO','MORPHO'],
+  'בורסות מרכזיות': ['BNB','OKB','KCS','CRO','BGB','LEO']
+};
+function sectorOf(sym){
+  for(const s in SECTORS) if(SECTORS[s].indexOf(sym) !== -1) return s;
+  return 'מטבעות נישה';
+}
+function scoreCoin(c, ctx){
+  const f = [];
+  let score = 0;
+  let m = 0;
+  if(c.c24h >= 3 && c.c24h <= 8) m = 25;
+  else if(c.c24h > 8 && c.c24h <= 12) m = 18;
+  else if(c.c24h > 1 && c.c24h < 3) m = 12;
+  else if(c.c24h > 12 && c.c24h <= 15) m = 8;
+  else if(c.c24h > 0) m = 5;
+  score += m; f.push({k:'מומנטום', v:pctTxt(c.c24h), pts:m, max:25});
+  const vr = ctx.volRank[c.name] || 0;
+  const v = Math.round(vr*20);
+  score += v; f.push({k:'נפח', v:'דירוג ' + Math.round(vr*100), pts:v, max:20});
+  let t = 0; const c7 = c.c7d || 0;
+  if(!c.c7d) { t = 6; f.push({k:'טרנד 7י', v:'n/a', pts:t, max:15}); }
+  else { if(c7 > 5) t = 15; else if(c7 > 0) t = 10; else if(c7 > -5) t = 5; f.push({k:'טרנד 7י', v:pctTxt(c7), pts:t, max:15}); }
+  score += t;
+  let r = 0, rp = 50;
+  if(c.hi > c.lo){
+    rp = (c.price-c.lo)/(c.hi-c.lo)*100;
+    if(rp>=40 && rp<=90) r=15; else if(rp>90 && rp<=97) r=10; else r=4;
+  }
+  score += r; f.push({k:'מיקום בטווח', v:(c.hi>c.lo ? rp.toFixed(0)+'%' : 'n/a'), pts:r, max:15});
+  const atrp = c.lo>0 ? (c.hi-c.lo)/c.lo*100 : 0;
+  let a = 0;
+  if(atrp>=2 && atrp<=8) a=10; else if(atrp>8 && atrp<=14) a=6; else a=3;
+  score += a; f.push({k:'תנודתיות', v:atrp.toFixed(1)+'%', pts:a, max:10});
+  let fu = 0;
+  const fr = ctx.fund ? ctx.fund[c.name] : null;
+  if(fr !== null && fr !== undefined){
+    const pct8 = fr*100;
+    if(pct8 <= 0.01 && pct8 >= -0.03) fu = 15;
+    else if(pct8 <= 0.03) fu = 10;
+    else if(pct8 <= 0.05) fu = 4;
+    f.push({k:'Funding', v:pctTxt(pct8), pts:fu, max:15});
+  } else { f.push({k:'Funding', v:'n/a', pts:0, max:15}); }
+  score += fu;
+  const grade = score>=75?'A':score>=60?'B':score>=45?'C':'D';
+  const strong = f.filter(x=>x.pts/x.max >= 0.66).map(x=>x.k);
+  const weak = f.filter(x=>x.pts/x.max <= 0.3 && x.k!=='Funding').map(x=>x.k);
+  const reason = (strong.length ? strong.join('·') : 'בלי יתרון ברור') + (weak.length ? ' | חלש: ' + weak.join('·') : '');
+  return {score: score, grade: grade, f: f, rp: rp, atrp: atrp, reason: reason};
+}
+
+function renderRecs(){
+  const el = document.getElementById('recs');
+  if(!DATA.length){
+    el.innerHTML = '<div class="rec"><span class="tag t-regime">סטטוס</span><span>'
+      + '<b class="rs">הדאטא עדיין לא נטען.</b><br>'
+      + '<span class="hint">קובץ data/market.json לא קיים עדיין (GitHub Actions טרם רץ) וכל מקורות ה-API החיים חסומים ברשת שלך. '
+      + 'הפעלי את Actions לפי README והדאטא יופיע.</span></span></div>';
+    return;
+  }
+  const up = DATA.filter(c=>c.c24h>0).length;
+  const ratio = up/DATA.length;
+  const avg = DATA.reduce((a,c)=>a+c.c24h,0)/DATA.length;
+  const vols = DATA.slice().sort((a,b)=>b.vol-a.vol);
+  const volRank = {};
+  vols.forEach((c,i)=>{ volRank[c.name] = 1 - i/DATA.length; });
+  const ctx = {volRank: volRank, fund: window.FUNDING || null};
+
+  const scored = DATA.map(c=>({c: c, s: scoreCoin(c, ctx)})).sort((a,b)=>b.s.score-a.s.score);
+
+  const secs = {};
+  DATA.forEach(c=>{ const s=sectorOf(c.name); (secs[s]=secs[s]||[]).push(c); });
+  const secRows = Object.keys(secs).map(k=>{
+    const arr = secs[k];
+    return {k:k, n:arr.length, avg:arr.reduce((a,c)=>a+c.c24h,0)/arr.length, vol:arr.reduce((a,c)=>a+c.vol,0)};
+  }).sort((a,b)=>b.avg-a.avg);
+  const topSec = secRows.slice(0,6);
+  let html = '<div class="lbl2">1. רגים שוק וסקטורים</div>'
+    + '<div class="rec"><span class="tag ' + (ratio>=0.55?'t-mom':ratio<=0.45?'t-avoid':'t-regime') + '">רגים: ' + (ratio>=0.55?'חיובי':ratio<=0.45?'שלילי':'מעורב') + '</span><span>'
+    + '<b class="rs">' + up + ' עולים מול ' + (DATA.length-up) + ' יורדים</b>'
+    + ' · שינוי ממוצע <span class="' + pctCls(avg) + '">' + pctTxt(avg) + '</span>'
+    + ' · Σ נפח $' + fmtV(DATA.reduce((a,c)=>a+c.vol,0)) + '<br>'
+    + '<span class="hint">' + (ratio>=0.55 ? 'רגים מומנטום: break-out ומומנטום פעילים, mean-reversion מושהה.'
+      : ratio<=0.45 ? 'רגים סיכוני: מחצית מגודל הפוזיציה, שורטים רק על retest, cash הוא גם פוזיציה.'
+      : 'רגים מעורב: רק setups א-לפאבט, אין כפיית מסחר.') + '</span></span></div>';
+  html += '<div class="twrap" style="margin-bottom:12px"><table><thead><tr><th>סקטור</th><th>מטבעות</th><th>שינוי ממוצע</th><th>Σ נפח</th><th>קריאה</th></tr></thead><tbody>'
+    + topSec.map(s=>'<tr><td style="font-weight:600">' + s.k + '</td><td class="num">' + s.n + '</td>'
+      + '<td class="num ' + pctCls(s.avg) + '">' + pctTxt(s.avg) + '</td>'
+      + '<td class="num" style="color:var(--txt2)">$' + fmtV(s.vol) + '</td>'
+      + '<td>' + (s.avg > 2 ? '<span class="up">מוביל</span>' : s.avg < -2 ? '<span class="dn">מוביל מכירות</span>' : '<span class="hint">נייטרלי</span>') + '</td></tr>').join('')
+    + '</tbody></table></div>';
+
+  if(FNG_VAL !== null){
+    html += '<div class="rec" style="margin-bottom:12px"><span class="tag ' + (FNG_VAL<=25?'t-watch':FNG_VAL>=75?'t-avoid':'t-regime') + '">סנטימנט</span><span>'
+      + '<b class="rs">Fear &amp; Greed: ' + FNG_VAL + '</b> · '
+      + (FNG_VAL<=25 ? 'פחד קיצוני. historically אזור קונטריאני, אבל פחד לא קונה לבד. מחכים לסיגנל מחיר מתהפך.'
+      : FNG_VAL>=75 ? 'חמדנה קיצונית. historically שיאים נוצרים באופוריה. מוציאים רווחים חלקיים ומקפידים על stops.'
+      : 'ניטרלי. אין קצה סנטימנטלי להתנגד אליו.') + '</span></div>';
+  }
+
+  const gc = {A:'var(--accent)', B:'var(--up)', C:'var(--warn)', D:'var(--txt3)'};
+  html += '<div class="lbl2">2. מנוע ציונים · 100 המטבעות מדורגים (מומנטום 25 · נפח 20 · טרנד 15 · טווח 15 · תנודתיות 10 · funding 15)</div>'
+    + '<div class="twrap"><table><thead><tr><th>#</th><th>מטבע</th><th>סקטור</th><th>ציון</th><th>דרגה</th><th>פירוט הגורמים</th></tr></thead><tbody>'
+    + scored.slice(0,20).map((x,i)=>{
+        const bars = x.s.f.map(f2=>'<span class="hint">' + f2.k + '</span> <span style="display:inline-block; width:44px; height:6px; background:#f0a8c8; border-radius:99px; vertical-align:middle; margin-left:8px"><span style="display:block; height:6px; width:' + Math.round(f2.pts/f2.max*100) + '%; background:' + (f2.pts/f2.max>=0.66?'var(--up)':f2.pts/f2.max<=0.3?'var(--dn)':'var(--warn)') + '; border-radius:99px"></span></span>').join('');
+        return '<tr><td class="hint num">' + (i+1) + '</td>'
+          + '<td style="font-weight:600">' + x.c.name + '</td>'
+          + '<td class="hint">' + sectorOf(x.c.name) + '</td>'
+          + '<td class="num" style="font-weight:600; font-size:15px">' + x.s.score + '</td>'
+          + '<td><span class="sig" style="background:rgba(194,24,91,.12); color:' + gc[x.s.grade] + '">' + x.s.grade + '</span></td>'
+          + '<td>' + bars + '</td></tr>';
+      }).join('')
+    + '</tbody></table></div>';
+
+  const today = new Date().toDateString();
+  const todayPnl = TRADES.filter(t => new Date(t.ts).toDateString() === today)
+    .reduce((a,t) => a + t.pnl, 0);
+  const locked = todayPnl <= -DAILY_LIMIT;
+  const acct = +(localStorage.getItem('rec_acct') || 10000);
+  const longMode = ratio >= 0.5;
+  const cands = longMode
+    ? scored.filter(x=>x.s.score>=60 && x.c.c24h>0 && x.c.c24h<=12).slice(0,3)
+    : scored.filter(x=>x.c.c24h<=-3).slice(0,3);
+  const weights = cands.map(x=> x.s.score * x.s.score);
+  const totW = weights.reduce((a,b)=>a+b,0) || 1;
+  html += '<div class="lbl2">3. מנהל תקציב · האם ובכמה לקנות · מצב: ' + (longMode?'לונגים':'שורטים') + '</div>'
+    + '<div class="ctrl" style="margin-bottom:10px">'
+    + '<b>תקציב להשקעה ($):</b> <input type="number" id="recAcct" value="' + acct + '" style="width:120px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:6px 10px; color:var(--txt)" onchange="localStorage.setItem(\'rec_acct\',this.value);renderRecs()">'
+    + '<span class="hint">המערכת מחלקת את התקציב לפי ציוני החוזק · סיכון 1% מכל חלק</span></div>';
+  if(locked){
+    html += '<div class="rec" style="border-color:rgba(231,76,60,.55)"><span class="tag t-avoid">מנעול יומי</span><span>'
+      + '<b class="rs">לא קונים כלום היום.</b> הפסד מצטבר ' + todayPnl.toFixed(2) + '% עבר את מגבלת ה-2%. '
+      + 'המנעול הוא החלטה מערכתית, לא רגשית. גם אם יופיע סטאפ מושלם, המערכת נועלת אותך מחוץ לשוק כדי להגן על החשבון.</span></div>';
+  } else if(cands.length){
+    let running = acct;
+    html += '<div class="grid2">';
+    cands.forEach((x, idx)=>{
+      const c = x.c;
+      const entry = c.price;
+      let stop, target, dirTxt, dirCls;
+      if(longMode){ stop = c.lo>0 ? c.lo*0.995 : entry*0.95; target = entry + 2*(entry-stop); dirTxt='לונג'; dirCls='up'; }
+      else { stop = c.hi>0 ? c.hi*1.005 : entry*1.05; target = entry - 2*(stop-entry); dirTxt='שורט'; dirCls='dn'; }
+      const riskPct = Math.abs(entry-stop)/entry*100;
+      const alloc = idx === cands.length-1 ? running : Math.round(acct * weights[idx]/totW);
+      running -= alloc;
+      const sizeTxt = x.s.score >= 75 ? 'חזק' : x.s.score >= 65 ? 'בינוני' : 'שולי';
+      html += '<div class="al" style="flex-direction:column; align-items:stretch; gap:6px"><div>'
+        + '<b class="rs">' + c.name + '</b> · <span class="' + dirCls + '"><b>' + dirTxt + '</b></span> · ציון ' + x.s.score + ' (דרגה ' + x.s.grade + ')</div>'
+        + '<div class="num" style="line-height:2.1; font-size:13.5px">'
+        + 'כניסה: <b>$' + fmtP(entry) + '</b><br>'
+        + 'סטופ: $' + fmtP(stop) + ' (' + riskPct.toFixed(2) + '%)<br>'
+        + 'יעד: $' + fmtP(target) + ' · יחס <b>1:2</b><br>'
+        + '<b>הקצאה: $' + fmtV(alloc) + '</b> <span class="hint">(' + sizeTxt + ')</span><br>'
+        + '<span class="hint">ביטול הסטאפ: ' + (longMode ? 'סגירה מתחת ל-$' + fmtP(stop) : 'סגירה מעל $' + fmtP(stop)) + ' עם נפח. ' + x.s.reason + '</span></div></div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="hint" style="margin-bottom:12px">אין סטאפים שעומדים בסף הציון כרגע. זו גם תשובה לגיטימית. קשה לעמוד בחוץ.</div>';
+  }
+
+  const hot = DATA.filter(c=>c.c24h>=15).slice(0,3);
+  const watch = DATA.filter(c=>c.c24h<=-7).sort((a,b)=>a.c24h-b.c24h).slice(0,3);
+  html += '<div class="lbl2">4. אזהרות</div>';
+  if(hot.length) html += '<div class="rec"><span class="tag t-avoid">לא רודפים</span><span><b>' + hot.map(c=>'<b>'+c.name+'</b> '+pctTxt(c.c24h)).join(' · ') + '</b>. מעל +15% ב-24ש = FOMO zone. 80% מהתנועות האלה עושות retest חד. שולטים ברגש: ההזדמנות לא תברח, היא תחזור עם בסיס.</span></div>';
+  if(watch.length) html += '<div class="rec"><span class="tag t-watch">השגחה</span><span><b>' + watch.map(c=>'<b>'+c.name+'</b> '+pctTxt(c.c24h)).join(' · ') + '</b>. סכינים נופלות לא נתפסות. מחכים ל-4ש ירוק או בסיס מספק, רק אז סריקת mean-reversion.</span></div>';
+  if(PF.length){
+    const over = PF.filter(h=>{ const c=findCoin(h.sym); return c && c.c24h >= 10; });
+    if(over.length) html += '<div class="rec"><span class="tag t-avoid">התיק שלך</span><span><b>' + over.map(h=>h.sym).join(' · ') + '</b> עולים מעל +10% היום. כלל: מכירת 20-30% חלקית בכל תנועה כזאת, לאסוף רווח בדרך.</span></div>';
+    const bigH = PF.slice().sort((a,b)=>b.amt*b.buy - a.amt*a.buy)[0];
+    if(bigH){
+      const c = findCoin(bigH.sym);
+      if(c){
+        const v = bigH.amt*c.price;
+        const tot = PF.reduce((a,h)=>{ const cc=findCoin(h.sym); return a + (cc ? h.amt*cc.price : 0); },0);
+        if(tot > 0 && v/tot > 0.5) html += '<div class="rec"><span class="tag t-watch">ריכוזיות</span><span><b>' + bigH.sym + '</b> הוא ' + (v/tot*100).toFixed(0) + '% מהתיק. מעל 50% במטבע אחד = סיכון ריכוזי. שוקלי פיזור.</span></div>';
+      }
+    }
+  }
+
+  if(window.BT_DATA && window.BT_DATA.results && window.BT_DATA.results.length){
+    const best = window.BT_DATA.results.slice().sort((a,x)=> x.expectancy - a.expectancy)[0];
+    html += '<div class="lbl2">5. מהאומרת ההיסטוריה (backtest שבועי)</div>'
+      + '<div class="rec"><span class="tag t-regime">בקטסט</span><span><b class="rs">' + best.strategy + ' על ' + best.symbol + '</b>'
+      + ' · תוחלת ' + best.expectancy.toFixed(2) + '% לעסקה · זכיות ' + best.winRate.toFixed(0) + '% · ' + best.trades + ' עסקאות ב-' + best.days + ' ימים'
+      + '<br><span class="hint">על נרות אמיתיים, כולל עמלות. מופיע אחרי הפעלת Actions.</span></span></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+/* ============================================================
+   היסטוריה (localStorage) + זיהוי מוקדם
+   ============================================================ */
+function snapshot(){
+  try{
+    let hist = loadLS('mkt_history', []);
+    const today = new Date().toISOString().slice(0,10);
+    if(hist.length && hist[hist.length-1].d === today) return;
+    const up = DATA.filter(c=>c.c24h>0).length;
+    const volSum = DATA.reduce((a,c)=>a+c.vol,0);
+    const avg = DATA.reduce((a,c)=>a+c.c24h,0)/DATA.length;
+    const btc = findCoin('BTC');
+    hist.push({d:today, up:up, dn:DATA.length-up, vol:Math.round(volSum), avg:+avg.toFixed(2), btc: btc? btc.price:0});
+    hist = hist.slice(-30);
+    saveLS('mkt_history', hist);
+    renderHist(hist);
+  }catch(e){}
+}
+function renderHist(hist){
+  if(!hist || !hist.length) return;
+  document.getElementById('histPanel').style.display = 'block';
+  document.getElementById('hist').innerHTML = hist.slice().reverse().map(h=>
+    '<tr><td class="num">' + h.d + '</td><td class="num">' + h.up + ' / ' + h.dn + '</td>'
+    + '<td class="num">$' + fmtV(h.vol) + '</td>'
+    + '<td class="num ' + pctCls(h.avg) + '">' + pctTxt(h.avg) + '</td>'
+    + '<td class="num">$' + fmtP(h.btc) + '</td></tr>'
+  ).join('');
+}
+renderHist(loadLS('mkt_history', []));
+
+function detectMoves(){
+  try{
+    const prev = loadLS('coin_prev', null);
+    const cur = {};
+    DATA.forEach((c,i)=>{ cur[c.name] = {i: i, vol: c.vol}; });
+    const items = [];
+    if(prev && Object.keys(prev).length >= 50){
+      DATA.filter(c=>!(c.name in prev)).forEach(c=>{
+        items.push('<div class="al"><span class="dot" style="background:var(--accent)"></span><span><b>' + c.name + '</b> נכנס לטופ 100 בנפח ($' + fmtV(c.vol) + ', ' + pctTxt(c.c24h) + ' היום). התעניינות חדשה. לבדוק: מה הסיבה (listing? חדשות?), והאם הנפח מגובה במחיר.</span></div>');
+      });
+      const climbers = [];
+      DATA.forEach(c=>{
+        const p = prev[c.name];
+        if(!p) return;
+        const jump = p.i - cur[c.name].i;
+        if(jump >= 25 && c.vol > 3e7) climbers.push({c: c, jump: jump});
+      });
+      climbers.sort((a,b)=> b.jump - a.jump);
+      climbers.slice(0,5).forEach(x=>{
+        items.push('<div class="al"><span class="dot" style="background:var(--warn)"></span><span><b>' + x.c.name + '</b> זינוק של ' + x.jump + ' מקומות בדירוג הנפח (עכשיו #' + (cur[x.c.name].i+1) + '). התעוררות לפני שהמטבע "אופנתי". לברר למה לפני שהרוב שם לב.</span></div>');
+      });
+    }
+    const panel = document.getElementById('movesPanel');
+    if(items.length){
+      panel.style.display = 'block';
+      document.getElementById('moves').innerHTML = '<div class="lbl">זיהוי מוקדם · מה חדש ומה זז בשוק (מושווה לביקור הקודם שלך)</div>' + items.join('');
+    } else {
+      panel.style.display = 'none';
+    }
+    saveLS('coin_prev', cur);
+  }catch(e){}
+}
+
+/* ============================================================
+   ניווט + הגדרות + שכבות נוספות
+   ============================================================ */
+window.showTab = function(n){
+  [1,2,3,4].forEach(i=>{
+    document.getElementById('t'+i).style.display = (i===n) ? '' : 'none';
+    document.getElementById('n'+i).classList.toggle('on', i===n);
+  });
+  if(n===2){ renderPortfolio(); renderJournal(); }
+  if(n===4) renderRecs();
+};
+window.toggleSettings = function(){
+  const s = document.getElementById('settings');
+  s.style.display = (s.style.display==='none') ? 'block' : 'none';
+};
+window.saveKey = function(){
+  localStorage.setItem('cg_demo_key', document.getElementById('cgkey').value.trim());
+  loadData(true);
+};
+window.clearKey = function(){
+  localStorage.removeItem('cg_demo_key');
+  document.getElementById('cgkey').value = '';
+  loadData(true);
+};
+window.saveEth = function(){
+  localStorage.setItem('eth_api_key', document.getElementById('ethkey').value.trim());
+  fetchGas();
+};
+window.clearEth = function(){
+  localStorage.removeItem('eth_api_key');
+  document.getElementById('ethkey').value = '';
+  document.getElementById('gasPanel').style.display = 'none';
+};
+
+async function fetchFNG(){
+  try{
+    const res = await fetch('https://api.alternative.me/fng/?limit=1');
+    const j = await res.json();
+    const d = j.data[0];
+    FNG_VAL = +d.value;
+    const cls = d.value_classification || '';
+    const col = FNG_VAL <= 25 ? 'var(--dn)' : FNG_VAL >= 75 ? 'var(--warn)' : 'var(--txt)';
+    document.getElementById('fngPanel').style.display = 'block';
+    document.getElementById('fng').innerHTML =
+      '<div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap">'
+      + '<div class="st" style="min-width:120px"><div class="k">הערך כרגע</div>'
+      + '<div class="v num" style="color:' + col + '; font-size:30px">' + FNG_VAL + '</div></div>'
+      + '<div style="font-size:14px; line-height:1.8">' + cls + '<br>'
+      + '<span class="hint">0 = פחד קיצוני, 100 = חמדנה קיצונית. מדד קונטריאני: פחד קיצוני historically אזור הזדמנות, חמדנה קיצונית historically סיכון.</span></div>'
+      + '</div>';
+    renderRecs();
+  }catch(e){}
+}
+
+async function fetchNews(){
+  try{
+    const cache = loadLS('news_cache', null);
+    if(cache && Date.now() - cache.ts < 15*60*1000 && cache.items){
+      renderNews(cache.items); return;
+    }
+    const feeds = ['https://cointelegraph.com/rss', 'https://www.coindesk.com/arc/outboundfeeds/rss/'];
+    let items = [];
+    for(const f of feeds){
+      try{
+        const res = await fetch('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(f));
+        const j = await res.json();
+        if(j.status === 'ok') items = items.concat(j.items || []);
+      }catch(e){}
+    }
+    items.sort((a,b)=> new Date(b.pubDate) - new Date(a.pubDate));
+    items = items.slice(0, 10);
+    saveLS('news_cache', {ts: Date.now(), items: items});
+    renderNews(items);
+  }catch(e){}
+}
+function renderNews(items){
+  if(!items || !items.length) return;
+  document.getElementById('newsPanel').style.display = 'block';
+  document.getElementById('news').innerHTML = items.map(n=>{
+    const mins = Math.max(0, Math.round((Date.now() - new Date(n.pubDate).getTime())/60000));
+    const tm = mins < 60 ? mins + ' דק׳' : Math.round(mins/60) + ' שע׳';
+    return '<div class="nrow"><a href="' + n.link + '" target="_blank" rel="noopener">' + n.title + '</a><span class="tm">' + tm + '</span></div>';
+  }).join('');
+}
+
+async function fetchGas(){
+  const key = (localStorage.getItem('eth_api_key') || '').trim();
+  if(!key) return;
+  try{
+    const res = await fetch('https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey=' + key);
+    const j = await res.json();
+    if(j.status !== '1') return;
+    const g = j.result;
+    document.getElementById('gasPanel').style.display = 'block';
+    document.getElementById('gas').innerHTML =
+      '<div class="stats" style="grid-template-columns:repeat(3,1fr); margin-bottom:0">'
+      + '<div class="st"><div class="k">איטי</div><div class="v num">' + g.SafeGasPrice + ' gwei</div></div>'
+      + '<div class="st"><div class="k">רגיל</div><div class="v num">' + g.ProposeGasPrice + ' gwei</div></div>'
+      + '<div class="st"><div class="k">מהיר</div><div class="v num">' + g.FastGasPrice + ' gwei</div></div>'
+      + '</div>'
+      + '<div class="hint" style="margin-top:8px">גז גבוה = עומס רשת = לחץ על מחירי הטוקנים הקטנים. גבוה חריג + נפח DEX עולה = סנטימנט ספקולטיבי.</div>';
+  }catch(e){}
+}
+
+function renderFunding(map){
+  const want = ['BTC','ETH','SOL','BNB','XRP','DOGE','ADA','AVAX','LINK','DOT'];
+  const rows = want.filter(s => map[s] !== undefined)
+    .map(s => ({sym: s, f: map[s]}));
+  if(!rows.length) return;
+  document.getElementById('fundPanel').style.display = 'block';
+  document.getElementById('fundRows').innerHTML = rows.map(r=>{
+    const pct8 = r.f * 100;
+    const ann = pct8 * 3 * 365;
+    const status = pct8 >= 0.05 ? '<span class="dn">ספקולציה לונג קיצונית</span>'
+      : pct8 <= -0.05 ? '<span class="up">ספקולציה שורט קיצונית</span>'
+      : '<span class="hint">נורמלי</span>';
+    return '<tr><td class="coin">' + r.sym + '</td>'
+      + '<td class="num ' + pctCls(pct8) + '">' + pctTxt(pct8) + '</td>'
+      + '<td class="num" style="color:var(--txt2)">' + pctTxt(ann) + '</td>'
+      + '<td>' + status + '</td></tr>';
+  }).join('');
+}
+
+async function fetchFundingLive(){
+  try{
+    const r = await fetch('https://api.bybit.com/v5/market/tickers?category=linear');
+    const j = await r.json();
+    if(j.retCode !== 0) return;
+    const want = ['BTC','ETH','SOL','BNB','XRP','DOGE','ADA','AVAX','LINK','DOT'];
+    const map = {};
+    j.result.list.forEach(t=>{
+      const s = t.symbol.replace('USDT','');
+      if(want.indexOf(s) !== -1) map[s] = +t.fundingRate;
+    });
+    if(Object.keys(map).length){
+      window.FUNDING = map;
+      renderFunding(map);
+    }
+  }catch(e){}
+}
+
+async function loadExtras(){
+  fetchFNG(); fetchNews(); fetchGas();
+  if(!window.FUNDING) fetchFundingLive();
+  try{
+    const r2 = await fetch('./data/backtest.json?ts=' + Date.now());
+    if(r2.ok){
+      const b = await r2.json();
+      if(b.results && b.results.length){
+        window.BT_DATA = b;
+        renderRecs();
+      }
+    }
+  }catch(e){}
+}
+
+document.getElementById('cgkey').value = localStorage.getItem('cg_demo_key') || '';
+document.getElementById('ethkey').value = localStorage.getItem('eth_api_key') || '';
+loadData(false);
+setInterval(function(){ countdown--; if(countdown<=0) loadData(false); document.getElementById('cd').textContent = Math.max(0,countdown); }, 1000);
+</script>
+
+<script>
+/* ============================================================
+   גרף נרות + מנעול יומי
+   ============================================================ */
+async function fetchKlines(sym, interval){
+  sym = sym + 'USDT';
+  if(window.FILE_CANDLES && window.FILE_CANDLES[sym + '_' + interval]){
+    return {src:'Actions snapshot', data: window.FILE_CANDLES[sym + '_' + interval]};
+  }
+  try{
+    const r = await fetch('https://api.binance.com/api/v3/klines?symbol=' + sym + '&interval=' + interval + '&limit=100');
+    if(!r.ok) throw 0;
+    const k = await r.json();
+    return {src:'Binance', data: k.map(x=>({t:+x[0], o:+x[1], h:+x[2], l:+x[3], c:+x[4], v:+x[5]}))};
+  }catch(e){}
+  try{
+    const map = {'1h':'60','4h':'240','1d':'D'};
+    const r = await fetch('https://api.bybit.com/v5/market/kline?category=spot&symbol=' + sym + '&interval=' + map[interval] + '&limit=100');
+    const j = await r.json();
+    if(j.retCode !== 0) throw 0;
+    return {src:'Bybit', data: j.result.list.map(x=>({t:+x[0], o:+x[1], h:+x[2], l:+x[3], c:+x[4], v:+x[5]})).reverse()};
+  }catch(e){}
+  return null;
+}
+
+window.loadChart = async function(){
+  const sym = document.getElementById('chSym').value;
+  const interval = document.getElementById('chInt').value;
+  const box = document.getElementById('chartBox');
+  box.innerHTML = '<span class="hint">טוען נרות…</span>';
+  const res = await fetchKlines(sym, interval);
+  if(!res){ box.innerHTML = '<span class="hint">לא הצלחתי לטעון נרות. אחרי הפעלת GitHub Actions הגרף עובד מה-snapshot.</span>'; return; }
+  document.getElementById('chSrc').textContent = 'מקור נרות: ' + res.src;
+  drawChart(box, res.data, sym);
+};
+
+function drawChart(box, k, sym){
+  const n = k.length;
+  const W = 1000, H = 320, padL = 8, padR = 70, padT = 10, padB = 70;
+  const cw = (W - padL - padR) / n;
+  let hi = -Infinity, lo = Infinity, vMax = 0;
+  k.forEach(c=>{ hi=Math.max(hi,c.h); lo=Math.min(lo,c.l); vMax=Math.max(vMax,c.v); });
+  const y = p => padT + (hi - p) / (hi - lo) * (H - padT - padB);
+  const vy = v => H - padB + 4 + (1 - v/vMax) * (padB - 14);
+  const UP = '#27ae60', DN = '#e74c3c';
+  let s = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" dir="ltr">';
+  s += '<line x1="' + padL + '" x2="' + (W-padR) + '" y1="' + y(k[n-1].c) + '" y2="' + y(k[n-1].c) + '" stroke="#b8899f" stroke-width="1" stroke-dasharray="4 4"/>';
+  k.forEach((c,i)=>{
+    const x = padL + i*cw + cw/2;
+    const col = c.c >= c.o ? UP : DN;
+    s += '<line x1="' + x + '" x2="' + x + '" y1="' + y(c.h) + '" y2="' + y(c.l) + '" stroke="' + col + '" stroke-width="1"/>';
+    const top = y(Math.max(c.o,c.c)), bot = y(Math.min(c.o,c.c));
+    s += '<rect x="' + (x - cw*0.3) + '" y="' + top + '" width="' + cw*0.6 + '" height="' + Math.max(1,bot-top) + '" fill="' + col + '" rx="1"/>';
+    s += '<rect x="' + (x - cw*0.3) + '" y="' + vy(c.v) + '" width="' + cw*0.6 + '" height="' + (H - padB + 4 - vy(c.v)) + '" fill="' + col + '" opacity="0.3"/>';
+  });
+  const last = k[n-1].c;
+  const dec = last >= 1000 ? 2 : last >= 1 ? 2 : 5;
+  for(let g=0; g<=4; g++){
+    const p = lo + (hi-lo)*g/4;
+    s += '<text x="' + (W-padR+8) + '" y="' + (y(p)+4) + '" fill="#b8899f" font-size="12">$' + p.toLocaleString('en-US',{maximumFractionDigits:dec}) + '</text>';
+    s += '<line x1="' + padL + '" x2="' + (W-padR) + '" y1="' + y(p) + '" y2="' + y(p) + '" stroke="#f0b8cf" stroke-width="0.5"/>';
+  }
+  s += '<text x="' + padL + '" y="' + (H-6) + '" fill="#b8899f" font-size="12">' + sym + '/USDT · ' + document.getElementById('chInt').value + ' · ' + n + ' נרות</text>';
+  s += '</svg>';
+  box.innerHTML = s;
+}
+
+const DAILY_LIMIT = 2;
+function updateLock(){
+  if(typeof TRADES === 'undefined' || !document.getElementById('lockBanner')) return;
+  const today = new Date().toDateString();
+  const sum = TRADES
+    .filter(t => new Date(t.ts).toDateString() === today)
+    .reduce((a,t) => a + t.pnl, 0);
+  const b = document.getElementById('lockBanner');
+  if(sum <= -DAILY_LIMIT){
+    b.style.display = 'block';
+    b.style.borderColor = 'rgba(231,76,60,.5)';
+    b.style.background = 'rgba(231,76,60,.08)';
+    b.style.color = '#c0392b';
+    b.innerHTML = '⛔ <b>מנעול יומי הופעל.</b> הפסד מצטבר היום: <b>' + sum.toFixed(2) + '%</b>. עברת את מגבלת ה-' + DAILY_LIMIT + '%. '
+      + 'אין כניסות חדשות עד מחר. זה לא עונש, זה מה שהציל את החשבון שלך.';
+  } else if(sum > 0){
+    b.style.display = 'block';
+    b.style.borderColor = 'rgba(39,174,96,.45)';
+    b.style.background = 'rgba(39,174,96,.07)';
+    b.style.color = '#1e8449';
+    b.innerHTML = '✅ יום חיובי עד כה: <b>+' + sum.toFixed(2) + '%</b>. נהג יום טוב יודע גם לעצור.';
+  } else {
+    b.style.display = 'none';
+  }
+}
+updateLock();
+</script>
+</body>
+</html>
