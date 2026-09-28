@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""
 update_data.py — שכבת הדאטא של הדשבורד
 רץ ב-GitHub Actions כל 30 דקות. בלי ספריות חיצוניות, בלי מפתח API.
 
