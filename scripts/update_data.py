@@ -2,7 +2,6 @@
 update_data.py — שכבת הדאטא של הדשבורד
 רץ ב-GitHub Actions כל 30 דקות.
 Binance חוסמת שרתי GitHub (HTTP 451), לכן: Bybit קודם, Binance גיבוי, CoinCap אחרון.
-"""
 import json, urllib.request, os, statistics
 from datetime import datetime, timezone
 
