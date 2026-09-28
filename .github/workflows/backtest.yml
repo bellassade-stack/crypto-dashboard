@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python scripts/backtest.py
+      - run: python scripts/scripts/backtest.py
       - name: commit
         run: |
           git config user.name "data-bot"
