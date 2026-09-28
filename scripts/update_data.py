@@ -1,33 +1,89 @@
 #!/usr/bin/env python3
 update_data.py — שכבת הדאטא של הדשבורד
-רץ ב-GitHub Actions כל 30 דקות. בלי ספריות חיצוניות, בלי מפתח API.
-
-כותב data/market.json הכולל:
-  tickers    · 100 המטבעות המובילים (מחיר, שינוי 24ש, נפח, high/low)
-  snapshots  · snapshot יומי של השוק (עד 90 יום אחורה)
-  indicators · RSI(14), ATR(14)% , volume z-score ל-top 10
-  funding    · funding rates מ-Bybit
-  candles    · 100 נרות 1ש של BTC ו-ETH (לגרף)
+רץ ב-GitHub Actions כל 30 דקות.
+Binance חוסמת שרתי GitHub (HTTP 451), לכן: Bybit קודם, Binance גיבוי, CoinCap אחרון.
 """
 import json, urllib.request, os, statistics
 from datetime import datetime, timezone
 
-BASE = "https://api.binance.com"
+BINANCE = "https://api.binance.com"
 BYBIT = "https://api.bybit.com"
+COINCAP = "https://api.coincap.io"
 DATA_DIR = "data"
 SKIP = {"USDCUSDT","FDUSDUSDT","TUSDUSDT","DAIUSDT","EURUSDT","TRYUSDT",
         "USDPUSDT","EURIUSDT","WBTCUSDT","XUSDUSDT"}
 FUNDING_WANT = ["BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","LINK","DOT"]
 CANDLE_SYMS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
-CANDLE_INTERVALS = ["1h", "4h"]
+CANDLE_INTERVALS = {"1h": "60", "4h": "240"}
+FIAT_SKIP = {"USDT","USDC","DAI","FDUSD","TUSD"}
 
 def get(url):
     req = urllib.request.Request(url, headers={"User-Agent": "crypto-dashboard/1.0"})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r)
 
+def tickers_bybit():
+    j = get(BYBIT + "/v5/market/tickers?category=spot")
+    coins = []
+    for t in j["result"]["list"]:
+        s = t["symbol"]
+        if not s.endswith("USDT") or s in SKIP:
+            continue
+        coins.append({
+            "symbol": s,
+            "price": float(t["lastPrice"]),
+            "c24h": float(t["price24hPcnt"]) * 100,
+            "vol": float(t.get("turnover24h") or 0),
+            "hi": float(t.get("highPrice24h") or 0),
+            "lo": float(t.get("lowPrice24h") or 0),
+        })
+    return coins
+
+def tickers_binance():
+    j = get(BINANCE + "/api/v3/ticker/24hr")
+    return [{
+        "symbol": t["symbol"],
+        "price": float(t["lastPrice"]),
+        "c24h": float(t["priceChangePercent"]),
+        "vol": float(t["quoteVolume"]),
+        "hi": float(t["highPrice"]), "lo": float(t["lowPrice"]),
+    } for t in j if t["symbol"].endswith("USDT") and t["symbol"] not in SKIP]
+
+def tickers_coincap():
+    j = get(COINCAP + "/v2/assets?limit=150")
+    return [{
+        "symbol": c["symbol"] + "USDT",
+        "price": float(c["priceUsd"]),
+        "c24h": float(c.get("changePercent24Hr") or 0),
+        "vol": float(c.get("volumeUsd24Hr") or 0),
+        "hi": 0, "lo": 0,
+    } for c in j["data"] if c["symbol"] not in FIAT_SKIP]
+
+def get_tickers():
+    for name, fn in [("bybit", tickers_bybit), ("binance", tickers_binance),
+                     ("coincap", tickers_coincap)]:
+        try:
+            coins = fn()
+            if coins:
+                print("tickers source:", name)
+                return coins
+        except Exception as e:
+            print(name, "failed:", e)
+    raise RuntimeError("all ticker sources failed")
+
 def klines(symbol, interval="1h", limit=200):
-    return get(f"{BASE}/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}")
+    iv = CANDLE_INTERVALS.get(interval)
+    if iv:
+        try:
+            j = get(f"{BYBIT}/v5/market/kline?category=spot&symbol={symbol}"
+                    f"&interval={iv}&limit={limit}")
+            rows = j["result"]["list"]
+            rows = rows[::-1]
+            return [[float(v) for v in r[:6]] for r in rows]
+        except Exception as e:
+            print("bybit klines failed:", symbol, e)
+    k = get(f"{BINANCE}/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}")
+    return [[float(v) for v in x[:6]] for x in k]
 
 def rsi(closes, period=14):
     if len(closes) < period + 1:
@@ -49,13 +105,13 @@ def atr_pct(k, period=14):
         return 0.0
     trs = []
     for i in range(1, len(k)):
-        h, l, pc = float(k[i][2]), float(k[i][3]), float(k[i-1][4])
+        h, l, pc = k[i][2], k[i][3], k[i-1][4]
         trs.append(max(h - l, abs(h - pc), abs(l - pc)))
-    atr = statistics.mean(trs[:period])
+    a = statistics.mean(trs[:period])
     for i in range(period, len(trs)):
-        atr = (atr * (period - 1) + trs[i]) / period
-    close = float(k[-1][4])
-    return atr / close * 100 if close else 0.0
+        a = (a * (period - 1) + trs[i]) / period
+    close = k[-1][4]
+    return a / close * 100 if close else 0.0
 
 def vol_z(vols, lookback=20):
     if len(vols) < lookback * 2:
@@ -67,29 +123,25 @@ def vol_z(vols, lookback=20):
 
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
-    tickers = get(BASE + "/api/v3/ticker/24hr")
-    coins = [t for t in tickers
-             if t["symbol"].endswith("USDT") and t["symbol"] not in SKIP]
-    coins.sort(key=lambda t: float(t["quoteVolume"]), reverse=True)
+    coins = get_tickers()
+    coins.sort(key=lambda t: t["vol"], reverse=True)
     top = coins[:100]
 
-    # 1. tickers לדשבורד
     tickers_out = [{
         "name": t["symbol"].replace("USDT", ""),
-        "price": float(t["lastPrice"]),
-        "c24h": float(t["priceChangePercent"]),
+        "price": t["price"],
+        "c24h": t["c24h"],
         "c1h": 0, "c7d": 0,
-        "vol": float(t["quoteVolume"]),
-        "hi": float(t["highPrice"]), "lo": float(t["lowPrice"]),
+        "vol": t["vol"],
+        "hi": t["hi"], "lo": t["lo"],
         "mc": 0
     } for t in top]
 
-    # 2. snapshot יומי
-    top50 = coins[:50]
-    up = sum(1 for t in top50 if float(t["priceChangePercent"]) > 0)
-    vol_sum = sum(float(t["quoteVolume"]) for t in top50)
-    avg = statistics.mean(float(t["priceChangePercent"]) for t in top50) if top50 else 0
-    btc = next((t for t in coins if t["symbol"] == "BTCUSDT"), None)
+    top50 = top[:50]
+    up = sum(1 for t in top50 if t["c24h"] > 0)
+    vol_sum = sum(t["vol"] for t in top50)
+    avg = statistics.mean(t["c24h"] for t in top50) if top50 else 0
+    btc = next((t for t in top if t["symbol"] == "BTCUSDT"), None)
 
     path = os.path.join(DATA_DIR, "market.json")
     out = {"updated": datetime.now(timezone.utc).isoformat(),
@@ -106,20 +158,19 @@ def main():
     snaps = [s for s in out["snapshots"] if s.get("d") != today]
     snaps.append({"d": today, "up": up, "dn": len(top50) - up,
                   "vol": int(vol_sum), "avg": round(avg, 2),
-                  "btc": float(btc["lastPrice"]) if btc else 0})
+                  "btc": btc["price"] if btc else 0})
     out["snapshots"] = snaps[-90:]
 
-    # 3. אינדיקטורים ל-top 10
     inds = []
-    for t in coins[:10]:
+    for t in top[:10]:
         sym = t["symbol"]
         try:
             k = klines(sym)
-            vols = [float(x[5]) for x in k]
-            closes = [float(x[4]) for x in k]
+            vols = [x[5] for x in k]
+            closes = [x[4] for x in k]
             inds.append({
                 "sym": sym.replace("USDT", ""),
-                "price": float(t["lastPrice"]),
+                "price": t["price"],
                 "rsi": round(rsi(closes), 1),
                 "atrPct": round(atr_pct(k), 2),
                 "volZ": round(vol_z(vols), 2),
@@ -128,7 +179,6 @@ def main():
             print(f"skip indicators {sym}: {e}")
     out["indicators"] = inds
 
-    # 4. funding מ-Bybit
     try:
         j = get(BYBIT + "/v5/market/tickers?category=linear")
         funding = {}
@@ -140,27 +190,24 @@ def main():
     except Exception as e:
         print("funding failed:", e)
 
-    # 5. נרות לגרף (5 מטבעות × 2 טווחים, 100 נרות כל אחד)
     candles = {}
     for sym in CANDLE_SYMS:
-        for interval in CANDLE_INTERVALS:
+        for iv_name in CANDLE_INTERVALS:
             try:
-                k = klines(sym, interval, 100)
-                candles[sym + "_" + interval] = [
-                    {"t": int(x[0]), "o": float(x[1]), "h": float(x[2]),
-                     "l": float(x[3]), "c": float(x[4]), "v": float(x[5])}
+                k = klines(sym, iv_name, 100)
+                candles[sym + "_" + iv_name] = [
+                    {"t": int(x[0]), "o": x[1], "h": x[2],
+                     "l": x[3], "c": x[4], "v": x[5]}
                     for x in k]
             except Exception as e:
-                print(f"skip candles {sym} {interval}: {e}")
+                print(f"skip candles {sym} {iv_name}: {e}")
     out["candles"] = candles
 
     out["tickers"] = tickers_out
     out["updated"] = datetime.now(timezone.utc).isoformat()
     with open(path, "w") as f:
         json.dump(out, f, ensure_ascii=False)
-    print(f"OK: {len(tickers_out)} tickers, {len(out['snapshots'])} snapshots, "
-          f"{len(inds)} indicators, {len(out['funding'])} funding, "
-          f"{len(out['candles'])} candle sets")
+    print(f"OK: {len(tickers_out)} tickers")
 
 if __name__ == "__main__":
     main()
